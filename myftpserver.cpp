@@ -1,187 +1,278 @@
 #include <iostream>
+#include <cstring>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include <string.h>
-#include <filesystem>
 #include <fstream>
-#include <sstream>
 #include <dirent.h>
-#include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
+#include <sstream>
 
-namespace fs = std::filesystem;
+
+#define PORT 8080
+#define BUFFER_SIZE 2048
+
 using namespace std;
 
-void handleClient(int clientSocket);
-bool sendFile(int clientSocket, const string& filename);
-bool receiveFile(int clientSocket, const string& filename);
-bool deleteFile(const string& filename);
-void listFiles(int clientSocket);
-void changeDirectory(const string& path);
-bool createDirectory(const string& dirname);
-string getCurrentDirectory();
+void sendResponse(int clientSocket, const char* response) {
+    ssize_t bytesSent = send(clientSocket, response, strlen(response), 0);
+    if (bytesSent == -1) {
+        cerr << "Error: Failed to send response to client" << endl;
+    }
+}
 
-int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " <port>" << endl;
-        return 1;
+void handleGet(int clientSocket, const string& filename) {
+    ifstream file(filename, ios::binary);
+    if (!file.is_open()) {
+        string errorMsg = "Error: File not found";
+        ssize_t bytesSent = send(clientSocket, errorMsg.c_str(), errorMsg.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send error message" << endl;
+        }
+        return;
     }
 
-    int port = atoi(argv[1]);
+    stringstream buffer;
+    buffer << file.rdbuf();
+    string fileContent = buffer.str();
+    file.close();
+
+    ssize_t bytesSent = send(clientSocket, fileContent.c_str(), fileContent.size(), 0);
+    if (bytesSent == -1) {
+        cerr << "Error: Failed to send file data" << endl;
+    }
+}
+
+void handlePut(int clientSocket, const char* filename) {
+    // Debugging
+    cout << "PUT command received for file: " << filename << endl;
+
+    ofstream file(filename, ios::binary);
+    if (!file.is_open()) {
+        cerr << "Error: Failed to open file for writing" << endl;
+        // Send error response to client
+        send(clientSocket, "Error: Failed to open file for writing", strlen("Error: Failed to open file for writing"), 0);
+        return;
+    }
+
+    char buffer[BUFFER_SIZE];
+    ssize_t bytesReceived;
+
+    cout<<"Receive file content and write it to the file"<<endl;
+while ((bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0)) > 0) {
+    // Write received data to file
+    file.write(buffer, bytesReceived);
+    
+    // Check for end-of-file (client closed connection)
+    if (bytesReceived < BUFFER_SIZE) {
+        break;
+    }
+}
+
+    cout<<"Check if the while loop exited due to an error or socket closure"<<endl;
+    if (bytesReceived == -1) {
+        cerr << "Error: Failed to receive file data" << endl;
+    } else if (bytesReceived == 0) {
+        cout << "Client closed the connection" << endl;
+    }
+
+    // Close the file
+    file.close();
+    cout << "File Closed" << endl;
+
+    // Send success response to client
+    send(clientSocket, "File received successfully", strlen("File received successfully"), 0);
+}
+
+
+
+void handleDelete(const char* filename, int clientSocket) {
+    // Debugging
+    cout << "DELETE command received for file: " << filename << endl;
+    
+    if (remove(filename) != 0) {
+        // Error deleting file
+        string errorMsg = "Error: Unable to delete file";
+        cerr << errorMsg << endl; // Log error to server console
+        ssize_t bytesSent = send(clientSocket, errorMsg.c_str(), errorMsg.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send error message" << endl;
+        }
+    } else {
+        // File deleted successfully
+        string successMsg = "File deleted successfully";
+        cout << successMsg << endl; // Log success to server console
+        ssize_t bytesSent = send(clientSocket, successMsg.c_str(), successMsg.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send success message" << endl;
+        }
+    }
+}
+
+
+void handlePwd(int clientSocket) {
+    // Debugging
+    cout << "PWD command received" << endl;
+    
+    char path[1024];
+    if (getcwd(path, sizeof(path)) != NULL) {
+        sendResponse(clientSocket, path);
+    } else {
+        sendResponse(clientSocket, "Error: Unable to get current directory\n");
+    }
+}
+
+void handleLs(int clientSocket) {
+    // Debugging
+    cout << "LS command received" << endl;
+    
+    DIR* dir;
+    struct dirent* ent;
+    stringstream fileList;
+    
+    if ((dir = opendir(".")) != NULL) {
+        while ((ent = readdir(dir)) != NULL) {
+            fileList << ent->d_name << "\n";
+        }
+        closedir(dir);
+        
+        // Send the concatenated file list to the client
+        string fileListStr = fileList.str();
+        ssize_t bytesSent = send(clientSocket, fileListStr.c_str(), fileListStr.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send file list to client" << endl;
+        }
+    } else {
+        sendResponse(clientSocket, "Error: Unable to open directory\n");
+    }
+}
+
+
+void handleCd(int clientSocket, const char* dirname) {
+    // Debugging
+    cout << "CD command received to directory: " << dirname << endl;
+    
+    if (chdir(dirname) != 0) {
+        string errorMsg = "Error: Unable to change directory";
+        cerr << errorMsg << endl; // Log error to server console
+        ssize_t bytesSent = send(clientSocket, errorMsg.c_str(), errorMsg.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send error message" << endl;
+        }
+    } else {
+        // Directory changed successfully
+        string successMsg = "Directory changed successfully";
+        cout << successMsg << endl; // Log success to server console
+        ssize_t bytesSent = send(clientSocket, successMsg.c_str(), successMsg.size(), 0);
+        if (bytesSent == -1) {
+            cerr << "Error: Failed to send success message" << endl;
+        }
+    }
+}
+
+
+void handleMkdir(int clientSocket, const char* dirname) {
+    // Debugging
+    cout << "MKDIR command received for directory: " << dirname << endl;
+    
+    if (mkdir(dirname, 0777) != 0) {
+        sendResponse(clientSocket, "Error: Unable to create directory\n");
+    } else {
+        sendResponse(clientSocket, "Directory created successfully\n");
+    }
+}
+
+int main() {
     int serverSocket, clientSocket;
     struct sockaddr_in serverAddr, clientAddr;
-    socklen_t addrSize;
+    char buffer[BUFFER_SIZE] = {0};
+    socklen_t addrLen = sizeof(serverAddr);
 
-    fs::current_path(fs::path(argv[0]).parent_path());
-
-    serverSocket = socket(PF_INET, SOCK_STREAM, 0);
+    // Create socket
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == -1) {
-        cerr << "Cannot create socket" << endl;
-        return 1;
+        cerr << "Error: Socket creation failed" << endl;
+        return -1;
     }
 
-    memset(&serverAddr, 0, sizeof(serverAddr));
+    // Allow user to specify port number
+    int port;
+    cout << "Enter port number: ";
+    cin >> port;
+
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
     serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(port);
 
-    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
-        cerr << "Bind failed" << endl;
-        return 1;
+    // Bind socket
+    if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) == -1) {
+        cerr << "Error: Binding failed" << endl;
+        return -1;
     }
 
-    if (listen(serverSocket, 50) == -1) {
-        cerr << "Listen failed" << endl;
-        return 1;
+    // Listen for connections
+    if (listen(serverSocket, 5) == -1) {
+        cerr << "Error: Listening failed" << endl;
+        return -1;
     }
-    cout << "Server started on port " << port << ". Waiting for connections..." << endl;
 
+    cout << "Server started listening on port " << port << endl;
+
+    // Accept incoming connections
+    clientSocket = accept(serverSocket, (struct sockaddr *)&clientAddr, &addrLen);
+    if (clientSocket == -1) {
+        cerr << "Error: Connection acceptance failed" << endl;
+        return -1;
+    }
+    cout << "Client connected" << endl;
+
+    // Handle client commands
     while (true) {
-        addrSize = sizeof(clientAddr);
-        clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &addrSize);
-        if (clientSocket < 0) {
-            cerr << "Accept failed" << endl;
-            continue;
+        cout << "Waiting for command from client..." << endl;
+        ssize_t bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0);
+        if (bytesReceived == -1) {
+            cerr << "Error: Failed to receive command from client" << endl;
+            break;
+        } else if (bytesReceived == 0) {
+            cout << "Client disconnected" << endl;
+            break;
         }
-        handleClient(clientSocket);
+
+        cout << "Command received: " << buffer << endl;
+
+        if (strcmp(buffer, "quit") == 0) {
+            cout << "Quitting session" << endl;
+            break;
+        }
+
+        // Parse command and execute appropriate action
+        char* token = strtok(buffer, " ");
+        if (token != NULL) {
+            if (strcmp(token, "get") == 0) {
+                handleGet(clientSocket, strtok(NULL, " "));
+            } else if (strcmp(token, "put") == 0) {
+                handlePut(clientSocket, strtok(NULL, " "));
+            } else if (strcmp(token, "delete") == 0) {
+       		 handleDelete(strtok(NULL, " "), clientSocket);
+	    } else if (strcmp(token, "pwd") == 0) {
+		handlePwd(clientSocket);
+		} else if (strcmp(token, "ls") == 0) {
+		    handleLs(clientSocket);
+		} else if (strcmp(token, "cd") == 0) {
+		    handleCd(clientSocket, strtok(NULL, " "));
+		} else if (strcmp(token, "mkdir") == 0) {
+		    handleMkdir(clientSocket, strtok(NULL, " "));
+		    } else {
+                sendResponse(clientSocket, "Error: Unknown command\n");
+            }
+        }
+        
+        memset(buffer, 0, BUFFER_SIZE);
     }
 
     close(serverSocket);
-    return 0;
-}
-
-void handleClient(int clientSocket) {
-    char buffer[1024];
-    int bytesReceived;
-
-    while ((bytesReceived = recv(clientSocket, buffer, 1024, 0)) > 0) {
-        string command(buffer, bytesReceived);
-        istringstream iss(command);
-        string cmd;
-        iss >> cmd;
-
-        if (cmd == "get") {
-            string filename;
-            iss >> filename;
-            sendFile(clientSocket, filename);
-        } else if (cmd == "put") {
-            string filename;
-            iss >> filename;
-            receiveFile(clientSocket, filename);
-        } else if (cmd == "delete") {
-            string filename;
-            iss >> filename;
-            deleteFile(filename);
-        } else if (cmd == "ls") {
-            listFiles(clientSocket);
-        } else if (cmd == "cd") {
-            string path;
-            iss >> path;
-            changeDirectory(path);
-        } else if (cmd == "mkdir") {
-            string dirname;
-            iss >> dirname;
-            createDirectory(dirname);
-        } else if (cmd == "pwd") {
-            string currentPath = getCurrentDirectory();
-            send(clientSocket, currentPath.c_str(), currentPath.size(), 0);
-        } else if (cmd == "quit") {
-            break;
-        } else {
-            string errorMsg = "Unknown command";
-            send(clientSocket, errorMsg.c_str(), errorMsg.size(), 0);
-        }
-    }
-
-    if (bytesReceived < 0) {
-        cerr << "Error in recv()" << endl;
-    }
-
     close(clientSocket);
-}
 
-bool sendFile(int clientSocket, const string& filename) {
-    ifstream file(filename, ios::binary);
-    if (file.is_open()) {
-        stringstream buffer;
-        buffer << file.rdbuf();
-        string fileContent = buffer.str();
-        send(clientSocket, fileContent.c_str(), fileContent.size(), 0);
-        return true;
-    } else {
-        string errorMsg = "Error: File not found";
-        send(clientSocket, errorMsg.c_str(), errorMsg.size(), 0);
-        return false;
-    }
-}
-
-bool receiveFile(int clientSocket, const string& filename) {
-    char fileBuffer[1024];
-    int bytesReceived = recv(clientSocket, fileBuffer, 1024, 0);
-    if (bytesReceived < 0) {
-        cerr << "Error in receiving file" << endl;
-        return false;
-    }
-
-    ofstream file(filename, ios::binary);
-    file.write(fileBuffer, bytesReceived);
-    return true;
-}
-
-bool deleteFile(const string& filename) {
-    if (remove(filename.c_str()) != 0) {
-        string errorMsg = "Error: Unable to delete file";
-        return false;
-    }
-    return true;
-}
-
-void listFiles(int clientSocket) {
-    string directoryContents;
-    for (const auto& entry : fs::directory_iterator(fs::current_path())) {
-        directoryContents += entry.path().filename().string() + "\n";
-    }
-    send(clientSocket, directoryContents.c_str(), directoryContents.length(), 0);
-}
-
-void changeDirectory(const string& path) {
-    if (path == "..") {
-        fs::current_path(fs::current_path().parent_path());
-    } else if (fs::exists(path) && fs::is_directory(path)) {
-        fs::current_path(path);
-    }
-}
-
-bool createDirectory(const string& dirname) {
-    if (!fs::create_directory(dirname)) {
-        return false;
-    }
-    return true;
-}
-
-string getCurrentDirectory() {
-    return fs::current_path().string();
+    return 0;
 }
 
