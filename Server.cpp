@@ -62,7 +62,7 @@ void handlePut(int clientSocket, const char* filename) {
     ssize_t bytesReceived;
     bool success = true; // Flag to track if the file transfer is successful
 
-    cout << "Receive file content and write it to the file" << endl;
+    //cout << "Receive file content and write it to the file" << endl;
     while ((bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0)) > 0) {
         // Write received data to file
         file.write(buffer, bytesReceived);
@@ -123,7 +123,7 @@ void handleDelete(const char* filename, int clientSocket) {
 
 void handlePwd(int clientSocket) {
     // Debugging
-    cout << "PWD command received" << endl;
+    //cout << "PWD command received" << endl;
     
     char path[1024];
     if (getcwd(path, sizeof(path)) != NULL) {
@@ -161,7 +161,7 @@ void handleLs(int clientSocket) {
 
 void handleCd(int clientSocket, const char* dirname) {
     // Debugging
-    cout << "CD command received to directory: " << dirname << endl;
+    // cout << "CD command received to directory: " << dirname << endl;
     
     if (chdir(dirname) != 0) {
         string errorMsg = "Error: Unable to change directory";
@@ -184,7 +184,7 @@ void handleCd(int clientSocket, const char* dirname) {
 
 void handleMkdir(int clientSocket, const char* dirname) {
     // Debugging
-    cout << "MKDIR command received for directory: " << dirname << endl;
+    // cout << "MKDIR command received for directory: " << dirname << endl;
     
     if (mkdir(dirname, 0777) != 0) {
         sendResponse(clientSocket, "Error: Unable to create directory\n");
