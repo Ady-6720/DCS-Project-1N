@@ -150,8 +150,8 @@ int main() {
             if (!errorOccurred) {
                 // Process received content
                 string content = receivedContent.str();
-                cout << "Received content from server:" << endl;
-                cout << content << endl;
+                //cout << "Received content from server:" << endl;
+                //cout << content << endl;
             } else {
                 // Handle error condition
                 cerr << "Error: Failed to receive file content" << endl;
