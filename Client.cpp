@@ -1,3 +1,4 @@
+//Client.cpp
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
@@ -9,10 +10,22 @@
 #include <algorithm>
 #include <cerrno>
 
-#define PORT 8080
 #define BUFFER_SIZE 2048
 
 using namespace std;
+
+void receiveResponse(int clientSocket) {
+    char buffer[BUFFER_SIZE] = {0};
+    ssize_t bytesRead = recv(clientSocket, buffer, BUFFER_SIZE, 0);
+    if (bytesRead == -1) {
+        perror("recv");
+        cerr << "Error: Failed to receive response from server" << endl;
+    } else if (bytesRead == 0) {
+        cerr << "Connection closed by server" << endl;
+    } else {
+        cout << "Server response: " << buffer << endl;
+    }
+}
 
 int main() {
     int clientSocket;
@@ -92,8 +105,7 @@ int main() {
             file.close();
 
             // Wait for server response
-            recv(clientSocket, buffer, BUFFER_SIZE, 0);
-            cout << "Server response: " << buffer << endl;
+            receiveResponse(clientSocket);
 
             continue;
         }
@@ -169,6 +181,57 @@ int main() {
             continue; // Move to the next iteration of the loop
         }
 
+        // Check for mkdir command
+        if (command.substr(0, 6) == "mkdir ") {
+            // Send the mkdir command to the server
+            ssize_t bytesSent = send(clientSocket, command.c_str(), command.size(), 0);
+            if (bytesSent == -1) {
+                perror("send");
+                cout << "Error code: " << errno << endl;
+                // Handle error condition
+                continue;
+            }
+
+            // Receive response from server
+            receiveResponse(clientSocket);
+
+            continue;
+        }
+
+        // Check for cd command
+        if (command.substr(0, 3) == "cd ") {
+            // Send the cd command to the server
+            ssize_t bytesSent = send(clientSocket, command.c_str(), command.size(), 0);
+            if (bytesSent == -1) {
+                perror("send");
+                cout << "Error code: " << errno << endl;
+                // Handle error condition
+                continue;
+            }
+
+            // Receive response from server
+            receiveResponse(clientSocket);
+
+            continue;
+        }
+
+        // Check for delete command
+        if (command.substr(0, 7) == "delete ") {
+            // Send the delete command to the server
+            ssize_t bytesSent = send(clientSocket, command.c_str(), command.size(), 0);
+            if (bytesSent == -1) {
+                perror("send");
+                cout << "Error code: " << errno << endl;
+                // Handle error condition
+                continue;
+            }
+
+            // Receive response from server
+            receiveResponse(clientSocket);
+
+            continue;
+        }
+
         // Convert string to C-style string for sending
         strncpy(buffer, command.c_str(), BUFFER_SIZE);
 
@@ -181,9 +244,8 @@ int main() {
         }
 
         // Receive response from server for specific commands
-        if (command == "pwd" || command == "ls" || command == "cd" || command == "mkdir") {
-            recv(clientSocket, buffer, BUFFER_SIZE, 0);
-            cout << "Server response: " << buffer << endl;
+        if (command == "pwd" || command == "ls") {
+            receiveResponse(clientSocket);
         }
 
         // Check if user wants to quit
@@ -198,3 +260,4 @@ int main() {
 
     return 0;
 }
+//Yash Joshi

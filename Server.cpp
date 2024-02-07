@@ -1,3 +1,4 @@
+//Server.cpp
 #include <iostream>
 #include <cstring>
 #include <sys/socket.h>
@@ -9,7 +10,6 @@
 #include <sstream>
 
 
-#define PORT 8080
 #define BUFFER_SIZE 2048
 
 using namespace std;
@@ -48,7 +48,7 @@ void handleGet(int clientSocket, const string& filename) {
 
 void handlePut(int clientSocket, const char* filename) {
     // Debugging
-    //cout << "PUT command received for file: " << filename << endl;
+    cout << "PUT command received for file: " << filename << endl;
 
     ofstream file(filename, ios::binary);
     if (!file.is_open()) {
@@ -83,7 +83,6 @@ void handlePut(int clientSocket, const char* filename) {
 
     // Close the file
     file.close();
-    cout << "File Closed" << endl;
 
     // Send response to client
     if (success) {
@@ -124,7 +123,7 @@ void handleDelete(const char* filename, int clientSocket) {
 
 void handlePwd(int clientSocket) {
     // Debugging
-    //cout << "PWD command received" << endl;
+    cout << "PWD command received" << endl;
     
     char path[1024];
     if (getcwd(path, sizeof(path)) != NULL) {
@@ -162,7 +161,7 @@ void handleLs(int clientSocket) {
 
 void handleCd(int clientSocket, const char* dirname) {
     // Debugging
-    //cout << "CD command received to directory: " << dirname << endl;
+    cout << "CD command received to directory: " << dirname << endl;
     
     if (chdir(dirname) != 0) {
         string errorMsg = "Error: Unable to change directory";
@@ -174,7 +173,7 @@ void handleCd(int clientSocket, const char* dirname) {
     } else {
         // Directory changed successfully
         string successMsg = "Directory changed successfully";
-        cout << successMsg << endl; // Log success to server console
+        //cout << successMsg << endl; // Log success to server console
         ssize_t bytesSent = send(clientSocket, successMsg.c_str(), successMsg.size(), 0);
         if (bytesSent == -1) {
             cerr << "Error: Failed to send success message" << endl;
@@ -185,7 +184,7 @@ void handleCd(int clientSocket, const char* dirname) {
 
 void handleMkdir(int clientSocket, const char* dirname) {
     // Debugging
-    //cout << "MKDIR command received for directory: " << dirname << endl;
+    cout << "MKDIR command received for directory: " << dirname << endl;
     
     if (mkdir(dirname, 0777) != 0) {
         sendResponse(clientSocket, "Error: Unable to create directory\n");
@@ -287,3 +286,4 @@ int main() {
 
     return 0;
 }
+//Yash Joshi
