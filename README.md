@@ -20,5 +20,7 @@ Contributors
     Aditya Malode
 
 
-“This project was done in its entirety by Yash Joshi & Aditya Malode. We hereby
-state that we have not received unauthorized help of any form”
+## Oath
+
+This project was done in its entirety by Yash Joshi & Aditya Malode. We hereby state that we have not received unauthorized help of any form.
+
